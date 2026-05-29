@@ -1,15 +1,8 @@
-// routes/mantenimientos.js — Rutas para registros de mantenimiento
-
 const express = require('express');
 const router  = express.Router();
 const db      = require('../db');
 
-// ============================================================
-// GET /api/mantenimientos — Obtener todos los mantenimientos
-// ============================================================
 router.get('/', (req, res) => {
-  // JOIN une datos de varias tablas en una sola consulta
-  // Traemos el nombre del equipo y del técnico junto a cada mantenimiento
   const consulta = `
     SELECT
       m.*,
@@ -28,13 +21,9 @@ router.get('/', (req, res) => {
   });
 });
 
-// ============================================================
-// POST /api/mantenimientos — Crear nuevo mantenimiento
-// ============================================================
 router.post('/', (req, res) => {
   const { equipo_id, tecnico_id, tipo, descripcion, fecha_programada } = req.body;
 
-  // Validamos los campos obligatorios
   if (!equipo_id || !tecnico_id || !tipo || !fecha_programada) {
     return res.status(400).json({ error: 'Faltan campos obligatorios' });
   }
@@ -50,13 +39,9 @@ router.post('/', (req, res) => {
   });
 });
 
-// ============================================================
-// PUT /api/mantenimientos/:id/estado — Actualizar estado
-// ============================================================
 router.put('/:id/estado', (req, res) => {
   const { estado } = req.body;
 
-  // Verificamos que el estado sea uno de los valores permitidos
   const estadosValidos = ['pendiente', 'en_proceso', 'completado'];
   if (!estadosValidos.includes(estado)) {
     return res.status(400).json({ error: 'Estado no válido' });

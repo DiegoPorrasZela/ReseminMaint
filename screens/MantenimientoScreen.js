@@ -1,5 +1,3 @@
-// MantenimientoScreen.js — Formulario para registrar un nuevo mantenimiento
-
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
@@ -9,18 +7,16 @@ import {
 import { Picker } from '@react-native-picker/picker';
 import { API_URL } from '../utils/api';
 
-// El componente recibe "usuario" con los datos del técnico logueado
 export default function MantenimientoScreen({ usuario }) {
 
-  const [equipos,          setEquipos]          = useState([]); // Lista de equipos para el picker
-  const [equipoId,         setEquipoId]         = useState(''); // Equipo seleccionado
-  const [tipo,             setTipo]             = useState('preventivo');
-  const [descripcion,      setDescripcion]      = useState('');
-  const [fechaProgramada,  setFechaProgramada]  = useState('');
-  const [cargando,         setCargando]         = useState(false);
-  const [cargandoEquipos,  setCargandoEquipos]  = useState(true);
+  const [equipos,         setEquipos]         = useState([]);
+  const [equipoId,        setEquipoId]        = useState('');
+  const [tipo,            setTipo]            = useState('preventivo');
+  const [descripcion,     setDescripcion]     = useState('');
+  const [fechaProgramada, setFechaProgramada] = useState('');
+  const [cargando,        setCargando]        = useState(false);
+  const [cargandoEquipos, setCargandoEquipos] = useState(true);
 
-  // Cargamos la lista de equipos al montar el componente
   useEffect(() => {
     cargarEquipos();
   }, []);
@@ -30,7 +26,6 @@ export default function MantenimientoScreen({ usuario }) {
       const respuesta = await fetch(`${API_URL}/equipos`);
       const datos     = await respuesta.json();
       setEquipos(datos);
-      // Seleccionamos el primer equipo por defecto
       if (datos.length > 0) setEquipoId(datos[0].id.toString());
     } catch (error) {
       Alert.alert('Error', 'No se pudieron cargar los equipos');
@@ -39,7 +34,6 @@ export default function MantenimientoScreen({ usuario }) {
     }
   };
 
-  // Limpia el formulario después de registrar con éxito
   const limpiarFormulario = () => {
     setDescripcion('');
     setFechaProgramada('');
@@ -49,7 +43,6 @@ export default function MantenimientoScreen({ usuario }) {
 
   const handleEnviar = async () => {
 
-    // Validaciones
     if (!equipoId) {
       Alert.alert('Error', 'Selecciona un equipo');
       return;
@@ -59,7 +52,6 @@ export default function MantenimientoScreen({ usuario }) {
       return;
     }
 
-    // Validamos que la fecha tenga el formato correcto YYYY-MM-DD
     const regexFecha = /^\d{4}-\d{2}-\d{2}$/;
     if (!regexFecha.test(fechaProgramada)) {
       Alert.alert('Formato incorrecto', 'La fecha debe ser YYYY-MM-DD\nEjemplo: 2025-06-15');
@@ -73,7 +65,7 @@ export default function MantenimientoScreen({ usuario }) {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          equipo_id:        parseInt(equipoId), // parseInt convierte texto a número
+          equipo_id:        parseInt(equipoId),
           tecnico_id:       usuario.id,
           tipo,
           descripcion,
@@ -116,14 +108,12 @@ export default function MantenimientoScreen({ usuario }) {
         <Text style={styles.tituloSeccion}>Nuevo Mantenimiento</Text>
         <Text style={styles.subTitulo}>Técnico: {usuario?.nombre}</Text>
 
-        {/* Selector de equipo */}
         <Text style={styles.etiqueta}>Equipo *</Text>
         <View style={styles.pickerContenedor}>
           <Picker
             selectedValue={equipoId}
             onValueChange={(valor) => setEquipoId(valor)}
           >
-            {/* Mapeamos el arreglo de equipos para crear cada opción */}
             {equipos.map((eq) => (
               <Picker.Item
                 key={eq.id.toString()}
@@ -134,7 +124,6 @@ export default function MantenimientoScreen({ usuario }) {
           </Picker>
         </View>
 
-        {/* Selector de tipo de mantenimiento */}
         <Text style={styles.etiqueta}>Tipo *</Text>
         <View style={styles.pickerContenedor}>
           <Picker selectedValue={tipo} onValueChange={(valor) => setTipo(valor)}>
@@ -143,16 +132,15 @@ export default function MantenimientoScreen({ usuario }) {
           </Picker>
         </View>
 
-        {/* Campo de descripción con múltiples líneas */}
         <Text style={styles.etiqueta}>Descripción del trabajo</Text>
         <TextInput
           style={[styles.input, styles.inputMultilinea]}
           placeholder="Describe el trabajo a realizar..."
           value={descripcion}
           onChangeText={setDescripcion}
-          multiline={true}          // Permite múltiples líneas
+          multiline={true}
           numberOfLines={4}
-          textAlignVertical="top"   // El cursor empieza arriba
+          textAlignVertical="top"
         />
 
         <Text style={styles.etiqueta}>Fecha programada * (YYYY-MM-DD)</Text>

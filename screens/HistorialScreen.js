@@ -1,5 +1,3 @@
-// HistorialScreen.js — Historial de todos los mantenimientos registrados
-
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
@@ -9,15 +7,15 @@ import {
 import { API_URL } from '../utils/api';
 
 const COLORES_ESTADO = {
-  pendiente:   '#E67E22', // Naranja oscuro
-  en_proceso:  '#2980B9', // Azul
-  completado:  '#27AE60', // Verde
+  pendiente:  '#E67E22',
+  en_proceso: '#2980B9',
+  completado: '#27AE60',
 };
 
 const TEXTO_ESTADO = {
-  pendiente:   'Pendiente',
-  en_proceso:  'En Proceso',
-  completado:  'Completado',
+  pendiente:  'Pendiente',
+  en_proceso: 'En Proceso',
+  completado: 'Completado',
 };
 
 export default function HistorialScreen() {
@@ -48,7 +46,6 @@ export default function HistorialScreen() {
     cargarHistorial();
   };
 
-  // Función para cambiar el estado de un mantenimiento
   const cambiarEstado = async (id, nuevoEstado) => {
     try {
       const respuesta = await fetch(`${API_URL}/mantenimientos/${id}/estado`, {
@@ -58,8 +55,6 @@ export default function HistorialScreen() {
       });
 
       if (respuesta.ok) {
-        // Actualizamos el estado en la lista local sin volver a hacer fetch
-        // map() recorre el arreglo y devuelve uno nuevo con el cambio aplicado
         setMantenimientos((prev) =>
           prev.map((m) => m.id === id ? { ...m, estado: nuevoEstado } : m)
         );
@@ -69,7 +64,6 @@ export default function HistorialScreen() {
     }
   };
 
-  // Muestra un Alert con las opciones de estado al presionar el badge
   const mostrarOpciones = (item) => {
     Alert.alert(
       'Cambiar Estado',
@@ -88,7 +82,6 @@ export default function HistorialScreen() {
 
       <View style={styles.filaSuperior}>
         <Text style={styles.equipoNombre} numberOfLines={1}>{item.equipo_nombre}</Text>
-        {/* Al presionar el badge se pueden cambiar los estados */}
         <TouchableOpacity
           style={[styles.badge, { backgroundColor: COLORES_ESTADO[item.estado] }]}
           onPress={() => mostrarOpciones(item)}
@@ -114,12 +107,10 @@ export default function HistorialScreen() {
       <View style={styles.filaInfo}>
         <Text style={styles.etiqueta}>Fecha:</Text>
         <Text style={styles.valor}>
-          {/* Formateamos la fecha al estilo peruano dd/mm/yyyy */}
           {new Date(item.fecha_programada).toLocaleDateString('es-PE')}
         </Text>
       </View>
 
-      {/* Solo mostramos la descripción si existe */}
       {item.descripcion ? (
         <Text style={styles.descripcion}>{item.descripcion}</Text>
       ) : null}

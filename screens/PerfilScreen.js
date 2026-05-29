@@ -1,5 +1,3 @@
-// PerfilScreen.js — Perfil del usuario: editar datos y cambiar contraseña
-
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
@@ -9,26 +7,23 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../utils/api';
 
-// Recibe el usuario logueado y la función para actualizarlo en App.js
 export default function PerfilScreen({ usuario, setUsuario }) {
 
-  const [nombre,         setNombre]         = useState('');
-  const [email,          setEmail]          = useState('');
-  const [passActual,     setPassActual]     = useState('');
-  const [passNueva,      setPassNueva]      = useState('');
-  const [editando,       setEditando]       = useState(false); // Modo edición activo
-  const [cambiandoPass,  setCambiandoPass]  = useState(false); // Sección contraseña visible
-  const [cargando,       setCargando]       = useState(false);
+  const [nombre,        setNombre]        = useState('');
+  const [email,         setEmail]         = useState('');
+  const [passActual,    setPassActual]    = useState('');
+  const [passNueva,     setPassNueva]     = useState('');
+  const [editando,      setEditando]      = useState(false);
+  const [cambiandoPass, setCambiandoPass] = useState(false);
+  const [cargando,      setCargando]      = useState(false);
 
-  // Cargamos los datos del usuario cuando el componente se monta
   useEffect(() => {
     if (usuario) {
       setNombre(usuario.nombre);
       setEmail(usuario.email);
     }
-  }, [usuario]); // Se vuelve a ejecutar si "usuario" cambia
+  }, [usuario]);
 
-  // ——— Actualizar nombre y email ———
   const handleActualizarPerfil = async () => {
     if (!nombre || !email) {
       Alert.alert('Error', 'Nombre y correo son obligatorios');
@@ -49,10 +44,9 @@ export default function PerfilScreen({ usuario, setUsuario }) {
         return;
       }
 
-      // Actualizamos AsyncStorage con los nuevos datos para mantenerlos en sesión
       const usuarioActualizado = { ...usuario, nombre, email };
       await AsyncStorage.setItem('usuario', JSON.stringify(usuarioActualizado));
-      setUsuario(usuarioActualizado); // Actualizamos el estado global en App.js
+      setUsuario(usuarioActualizado);
 
       Alert.alert('Éxito', 'Perfil actualizado correctamente');
       setEditando(false);
@@ -64,7 +58,6 @@ export default function PerfilScreen({ usuario, setUsuario }) {
     }
   };
 
-  // ——— Cambiar contraseña ———
   const handleCambiarPassword = async () => {
     if (!passActual || !passNueva) {
       Alert.alert('Error', 'Completa ambos campos de contraseña');
@@ -101,7 +94,6 @@ export default function PerfilScreen({ usuario, setUsuario }) {
     }
   };
 
-  // ——— Cerrar sesión ———
   const handleCerrarSesion = () => {
     Alert.alert(
       'Cerrar Sesión',
@@ -112,9 +104,7 @@ export default function PerfilScreen({ usuario, setUsuario }) {
           text: 'Salir',
           style: 'destructive',
           onPress: async () => {
-            // Eliminamos el usuario de AsyncStorage
             await AsyncStorage.removeItem('usuario');
-            // Al poner null, App.js muestra el stack de autenticación
             setUsuario(null);
           },
         },
@@ -125,10 +115,8 @@ export default function PerfilScreen({ usuario, setUsuario }) {
   return (
     <ScrollView style={styles.contenedor}>
 
-      {/* Tarjeta de perfil con inicial del nombre */}
       <View style={styles.tarjetaPerfil}>
         <View style={styles.avatar}>
-          {/* charAt(0) toma la primera letra, toUpperCase la pone en mayúscula */}
           <Text style={styles.inicialAvatar}>
             {usuario?.nombre?.charAt(0).toUpperCase() || 'U'}
           </Text>
@@ -139,7 +127,6 @@ export default function PerfilScreen({ usuario, setUsuario }) {
         </Text>
       </View>
 
-      {/* ——— Sección Datos Personales ——— */}
       <View style={styles.seccion}>
         <View style={styles.filaEncabezado}>
           <Text style={styles.tituloSeccion}>Datos Personales</Text>
@@ -153,7 +140,7 @@ export default function PerfilScreen({ usuario, setUsuario }) {
           style={[styles.input, !editando && styles.inputSoloLectura]}
           value={nombre}
           onChangeText={setNombre}
-          editable={editando} // Solo editable cuando editando es true
+          editable={editando}
         />
 
         <Text style={styles.etiqueta}>Correo electrónico</Text>
@@ -166,7 +153,6 @@ export default function PerfilScreen({ usuario, setUsuario }) {
           autoCapitalize="none"
         />
 
-        {/* El botón guardar solo aparece en modo edición */}
         {editando && (
           <TouchableOpacity
             style={[styles.boton, cargando && styles.botonDesactivado]}
@@ -181,7 +167,6 @@ export default function PerfilScreen({ usuario, setUsuario }) {
         )}
       </View>
 
-      {/* ——— Sección Contraseña ——— */}
       <View style={styles.seccion}>
         <View style={styles.filaEncabezado}>
           <Text style={styles.tituloSeccion}>Contraseña</Text>
@@ -224,7 +209,6 @@ export default function PerfilScreen({ usuario, setUsuario }) {
         )}
       </View>
 
-      {/* Botón de cerrar sesión */}
       <TouchableOpacity style={styles.botonSalir} onPress={handleCerrarSesion}>
         <Text style={styles.textoBotonSalir}>Cerrar Sesión</Text>
       </TouchableOpacity>
@@ -246,7 +230,7 @@ const styles = StyleSheet.create({
   avatar: {
     width: 80,
     height: 80,
-    borderRadius: 40,          // La mitad del ancho/alto = círculo perfecto
+    borderRadius: 40,
     backgroundColor: '#F39C12',
     justifyContent: 'center',
     alignItems: 'center',

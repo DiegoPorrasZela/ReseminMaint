@@ -42,6 +42,7 @@ export default function LoginScreen({ navigation, setUsuario }) {
         return;
       }
 
+      await AsyncStorage.setItem('token', datos.token);
       await AsyncStorage.setItem('usuario', JSON.stringify(datos.usuario));
       setUsuario(datos.usuario);
 

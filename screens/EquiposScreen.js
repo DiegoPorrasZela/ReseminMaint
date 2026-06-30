@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, FlatList, StyleSheet,
+  View, Text, FlatList, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert, RefreshControl,
 } from 'react-native';
 
-import { API_URL } from '../utils/api';
+import { API_URL, authFetch } from '../utils/api';
 
 const COLORES_ESTADO = {
   operativo:         '#27AE60',
@@ -18,7 +18,7 @@ const TEXTO_ESTADO = {
   fuera_de_servicio: 'Fuera de Servicio',
 };
 
-export default function EquiposScreen() {
+export default function EquiposScreen({ usuario }) {
 
   const [equipos,     setEquipos]     = useState([]);
   const [cargando,    setCargando]    = useState(true);
@@ -30,7 +30,7 @@ export default function EquiposScreen() {
 
   const cargarEquipos = async () => {
     try {
-      const respuesta = await fetch(`${API_URL}/equipos`);
+      const respuesta = await authFetch(`${API_URL}/equipos`);
       const datos     = await respuesta.json();
       setEquipos(datos);
     } catch (error) {
@@ -46,14 +46,55 @@ export default function EquiposScreen() {
     cargarEquipos();
   };
 
+  const cambiarEstadoEquipo = async (id, nuevoEstado) => {
+    try {
+      const respuesta = await authFetch(`${API_URL}/equipos/${id}/estado`, {
+        method:  'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ estado: nuevoEstado }),
+      });
+
+      if (respuesta.ok) {
+        setEquipos((prev) =>
+          prev.map((eq) => eq.id === id ? { ...eq, estado: nuevoEstado } : eq)
+        );
+      }
+    } catch (error) {
+      Alert.alert('Error', 'No se pudo actualizar el estado del equipo');
+    }
+  };
+
+  const mostrarOpcionesEstado = (item) => {
+    Alert.alert(
+      'Cambiar Estado',
+      item.nombre,
+      [
+        { text: 'Operativo',         onPress: () => cambiarEstadoEquipo(item.id, 'operativo')         },
+        { text: 'En Mantenimiento',  onPress: () => cambiarEstadoEquipo(item.id, 'en_mantenimiento')  },
+        { text: 'Fuera de Servicio', onPress: () => cambiarEstadoEquipo(item.id, 'fuera_de_servicio') },
+        { text: 'Cancelar', style: 'cancel' },
+      ]
+    );
+  };
+
   const renderEquipo = ({ item }) => (
     <View style={styles.tarjeta}>
 
       <View style={styles.filaSuperior}>
         <Text style={styles.codigoEquipo}>{item.codigo}</Text>
-        <View style={[styles.badge, { backgroundColor: COLORES_ESTADO[item.estado] }]}>
-          <Text style={styles.textoBadge}>{TEXTO_ESTADO[item.estado]}</Text>
-        </View>
+
+        {usuario?.rol === 'supervisor' ? (
+          <TouchableOpacity
+            style={[styles.badge, { backgroundColor: COLORES_ESTADO[item.estado] }]}
+            onPress={() => mostrarOpcionesEstado(item)}
+          >
+            <Text style={styles.textoBadge}>{TEXTO_ESTADO[item.estado]}</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={[styles.badge, { backgroundColor: COLORES_ESTADO[item.estado] }]}>
+            <Text style={styles.textoBadge}>{TEXTO_ESTADO[item.estado]}</Text>
+          </View>
+        )}
       </View>
 
       <Text style={styles.nombreEquipo}>{item.nombre}</Text>

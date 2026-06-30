@@ -3,7 +3,6 @@ import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, Alert, ActivityIndicator, ScrollView,
 } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
 import { API_URL } from '../utils/api';
 
 export default function RegisterScreen({ navigation }) {
@@ -12,7 +11,6 @@ export default function RegisterScreen({ navigation }) {
   const [email,         setEmail]         = useState('');
   const [password,      setPassword]      = useState('');
   const [confirmarPass, setConfirmarPass] = useState('');
-  const [rol,           setRol]           = useState('tecnico');
   const [cargando,      setCargando]      = useState(false);
 
   const handleRegister = async () => {
@@ -36,7 +34,7 @@ export default function RegisterScreen({ navigation }) {
       const respuesta = await fetch(`${API_URL}/auth/register`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ nombre, email, password, rol }),
+        body:    JSON.stringify({ nombre, email, password }),
       });
 
       const datos = await respuesta.json();
@@ -105,17 +103,6 @@ export default function RegisterScreen({ navigation }) {
           secureTextEntry={true}
         />
 
-        <Text style={styles.etiqueta}>Rol en la empresa</Text>
-        <View style={styles.pickerContenedor}>
-          <Picker
-            selectedValue={rol}
-            onValueChange={(valor) => setRol(valor)}
-          >
-            <Picker.Item label="Técnico"    value="tecnico" />
-            <Picker.Item label="Supervisor" value="supervisor" />
-          </Picker>
-        </View>
-
         <TouchableOpacity
           style={[styles.boton, cargando && styles.botonDesactivado]}
           onPress={handleRegister}
@@ -175,13 +162,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-  },
-  pickerContenedor: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#D5D8DC',
-    borderRadius: 8,
-    overflow: 'hidden',
   },
   boton: {
     backgroundColor: '#1B4F72',

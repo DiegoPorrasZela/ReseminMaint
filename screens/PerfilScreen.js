@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_URL } from '../utils/api';
+import { API_URL, authFetch } from '../utils/api';
 
 export default function PerfilScreen({ usuario, setUsuario }) {
 
@@ -32,7 +32,7 @@ export default function PerfilScreen({ usuario, setUsuario }) {
 
     setCargando(true);
     try {
-      const respuesta = await fetch(`${API_URL}/usuarios/${usuario.id}`, {
+      const respuesta = await authFetch(`${API_URL}/usuarios/${usuario.id}`, {
         method:  'PUT',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ nombre, email }),
@@ -70,7 +70,7 @@ export default function PerfilScreen({ usuario, setUsuario }) {
 
     setCargando(true);
     try {
-      const respuesta = await fetch(`${API_URL}/usuarios/${usuario.id}/password`, {
+      const respuesta = await authFetch(`${API_URL}/usuarios/${usuario.id}/password`, {
         method:  'PUT',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ password_actual: passActual, password_nueva: passNueva }),
@@ -104,6 +104,7 @@ export default function PerfilScreen({ usuario, setUsuario }) {
           text: 'Salir',
           style: 'destructive',
           onPress: async () => {
+            await AsyncStorage.removeItem('token');
             await AsyncStorage.removeItem('usuario');
             setUsuario(null);
           },

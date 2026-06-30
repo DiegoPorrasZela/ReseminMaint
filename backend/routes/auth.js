@@ -1,7 +1,10 @@
 const express = require('express');
 const router  = express.Router();
 const bcrypt  = require('bcrypt');
+const jwt     = require('jsonwebtoken');
 const db      = require('../db');
+
+const JWT_SECRET = 'resemin_jwt_secret_2024';
 
 router.post('/register', async (req, res) => {
   const { nombre, email, password, rol } = req.body;
@@ -15,7 +18,7 @@ router.post('/register', async (req, res) => {
 
     const consulta = 'INSERT INTO usuarios (nombre, email, password_hash, rol) VALUES (?, ?, ?, ?)';
 
-    db.query(consulta, [nombre, email, passwordHash, rol || 'tecnico'], (error, resultado) => {
+    db.query(consulta, [nombre, email, passwordHash, 'tecnico'], (error, resultado) => {
       if (error) {
         if (error.code === 'ER_DUP_ENTRY') {
           return res.status(400).json({ error: 'El correo ya está registrado' });
@@ -54,8 +57,15 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Credenciales incorrectas' });
     }
 
+    const token = jwt.sign(
+      { id: usuario.id, email: usuario.email, rol: usuario.rol },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
     res.json({
       mensaje: 'Login exitoso',
+      token,
       usuario: {
         id:     usuario.id,
         nombre: usuario.nombre,

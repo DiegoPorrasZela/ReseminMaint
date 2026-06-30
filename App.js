@@ -16,7 +16,8 @@ export default function App() {
   const verificarSesion = async () => {
     try {
       const datos = await AsyncStorage.getItem('usuario');
-      if (datos !== null) {
+      const token = await AsyncStorage.getItem('token');
+      if (datos !== null && token !== null) {
         setUsuario(JSON.parse(datos));
       }
     } catch (error) {

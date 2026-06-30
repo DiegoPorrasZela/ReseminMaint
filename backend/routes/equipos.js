@@ -1,36 +1,44 @@
-// routes/equipos.js — Rutas para el catálogo de equipos mineros
-
 const express = require('express');
 const router  = express.Router();
 const db      = require('../db');
+const auth    = require('../middleware/authMiddleware');
+const { requireSupervisor } = require('../middleware/authMiddleware');
 
-// ============================================================
-// GET /api/equipos — Obtener todos los equipos
-// ============================================================
-router.get('/', (req, res) => {
-  // SELECT * trae todas las columnas y filas de la tabla equipos
+router.get('/', auth, (req, res) => {
   db.query('SELECT * FROM equipos ORDER BY codigo ASC', (error, resultados) => {
     if (error) return res.status(500).json({ error: 'Error al obtener equipos' });
-    // Enviamos el arreglo de equipos como respuesta JSON
     res.json(resultados);
   });
 });
 
-// ============================================================
-// GET /api/equipos/:id — Obtener un equipo por su ID
-// ============================================================
-router.get('/:id', (req, res) => {
-  // req.params.id toma el valor del :id en la URL
+router.get('/:id', auth, (req, res) => {
   db.query('SELECT * FROM equipos WHERE id = ?', [req.params.id], (error, resultados) => {
     if (error) return res.status(500).json({ error: 'Error al obtener equipo' });
 
-    // Si no encontramos el equipo, devolvemos 404
     if (resultados.length === 0) {
       return res.status(404).json({ error: 'Equipo no encontrado' });
     }
 
     res.json(resultados[0]);
   });
+});
+
+router.put('/:id/estado', auth, requireSupervisor, (req, res) => {
+  const { estado } = req.body;
+
+  const estadosValidos = ['operativo', 'en_mantenimiento', 'fuera_de_servicio'];
+  if (!estadosValidos.includes(estado)) {
+    return res.status(400).json({ error: 'Estado no válido' });
+  }
+
+  db.query(
+    'UPDATE equipos SET estado = ? WHERE id = ?',
+    [estado, req.params.id],
+    (error) => {
+      if (error) return res.status(500).json({ error: 'Error al actualizar estado del equipo' });
+      res.json({ mensaje: 'Estado del equipo actualizado correctamente' });
+    }
+  );
 });
 
 module.exports = router;

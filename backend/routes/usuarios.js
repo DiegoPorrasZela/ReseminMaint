@@ -1,15 +1,20 @@
-// routes/usuarios.js — Rutas para gestión del perfil de usuario
-
 const express = require('express');
 const router  = express.Router();
 const bcrypt  = require('bcrypt');
 const db      = require('../db');
+const auth    = require('../middleware/authMiddleware');
+const { requireSupervisor } = require('../middleware/authMiddleware');
 
-// ============================================================
-// GET /api/usuarios/:id — Obtener datos de un usuario
-// ============================================================
-router.get('/:id', (req, res) => {
-  // No seleccionamos password_hash por seguridad
+router.get('/', auth, requireSupervisor, (req, res) => {
+  const consulta = 'SELECT id, nombre, email, rol, created_at FROM usuarios ORDER BY nombre ASC';
+
+  db.query(consulta, (error, resultados) => {
+    if (error) return res.status(500).json({ error: 'Error al obtener usuarios' });
+    res.json(resultados);
+  });
+});
+
+router.get('/:id', auth, (req, res) => {
   const consulta = 'SELECT id, nombre, email, rol, created_at FROM usuarios WHERE id = ?';
 
   db.query(consulta, [req.params.id], (error, resultados) => {
@@ -19,10 +24,7 @@ router.get('/:id', (req, res) => {
   });
 });
 
-// ============================================================
-// PUT /api/usuarios/:id — Actualizar nombre y email del perfil
-// ============================================================
-router.put('/:id', (req, res) => {
+router.put('/:id', auth, (req, res) => {
   const { nombre, email } = req.body;
 
   if (!nombre || !email) {
@@ -44,29 +46,41 @@ router.put('/:id', (req, res) => {
   );
 });
 
-// ============================================================
-// PUT /api/usuarios/:id/password — Cambiar contraseña
-// ============================================================
-router.put('/:id/password', async (req, res) => {
+router.put('/:id/rol', auth, requireSupervisor, (req, res) => {
+  const { rol } = req.body;
+
+  const rolesValidos = ['tecnico', 'supervisor'];
+  if (!rolesValidos.includes(rol)) {
+    return res.status(400).json({ error: 'Rol no válido' });
+  }
+
+  db.query(
+    'UPDATE usuarios SET rol = ? WHERE id = ?',
+    [rol, req.params.id],
+    (error) => {
+      if (error) return res.status(500).json({ error: 'Error al actualizar rol' });
+      res.json({ mensaje: 'Rol actualizado correctamente' });
+    }
+  );
+});
+
+router.put('/:id/password', auth, async (req, res) => {
   const { password_actual, password_nueva } = req.body;
 
   if (!password_actual || !password_nueva) {
     return res.status(400).json({ error: 'Ambas contraseñas son obligatorias' });
   }
 
-  // Primero obtenemos el hash actual del usuario
   db.query('SELECT password_hash FROM usuarios WHERE id = ?', [req.params.id], async (error, resultados) => {
     if (error || resultados.length === 0) {
       return res.status(500).json({ error: 'Error del servidor' });
     }
 
-    // Verificamos que la contraseña actual sea correcta
     const esValida = await bcrypt.compare(password_actual, resultados[0].password_hash);
     if (!esValida) {
       return res.status(401).json({ error: 'La contraseña actual es incorrecta' });
     }
 
-    // Encriptamos la nueva contraseña antes de guardarla
     const nuevoHash = await bcrypt.hash(password_nueva, 10);
 
     db.query('UPDATE usuarios SET password_hash = ? WHERE id = ?', [nuevoHash, req.params.id], (error2) => {

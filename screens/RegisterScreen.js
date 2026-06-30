@@ -1,29 +1,20 @@
-// RegisterScreen.js — Pantalla de registro de nuevo usuario
-
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, Alert, ActivityIndicator, ScrollView,
 } from 'react-native';
-
-// Picker es el componente de lista desplegable (dropdown)
-import { Picker } from '@react-native-picker/picker';
-
 import { API_URL } from '../utils/api';
 
 export default function RegisterScreen({ navigation }) {
 
-  // Un estado por cada campo del formulario
-  const [nombre,           setNombre]           = useState('');
-  const [email,            setEmail]            = useState('');
-  const [password,         setPassword]         = useState('');
-  const [confirmarPass,    setConfirmarPass]    = useState('');
-  const [rol,              setRol]              = useState('tecnico'); // Valor inicial
-  const [cargando,         setCargando]         = useState(false);
+  const [nombre,        setNombre]        = useState('');
+  const [email,         setEmail]         = useState('');
+  const [password,      setPassword]      = useState('');
+  const [confirmarPass, setConfirmarPass] = useState('');
+  const [cargando,      setCargando]      = useState(false);
 
   const handleRegister = async () => {
 
-    // Validaciones antes de enviar al servidor
     if (!nombre || !email || !password || !confirmarPass) {
       Alert.alert('Error', 'Todos los campos son obligatorios');
       return;
@@ -40,12 +31,10 @@ export default function RegisterScreen({ navigation }) {
     setCargando(true);
 
     try {
-      // Enviamos los datos al endpoint de registro
-      // La contraseña se encriptará en el servidor con bcrypt
       const respuesta = await fetch(`${API_URL}/auth/register`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ nombre, email, password, rol }),
+        body:    JSON.stringify({ nombre, email, password }),
       });
 
       const datos = await respuesta.json();
@@ -55,7 +44,6 @@ export default function RegisterScreen({ navigation }) {
         return;
       }
 
-      // Si el registro fue exitoso, redirigimos al login
       Alert.alert(
         'Cuenta creada',
         'Tu cuenta fue creada correctamente. Ahora puedes iniciar sesión.',
@@ -70,7 +58,6 @@ export default function RegisterScreen({ navigation }) {
   };
 
   return (
-    // ScrollView permite desplazarse si el contenido es más largo que la pantalla
     <ScrollView style={styles.contenedor}>
 
       <View style={styles.encabezado}>
@@ -115,18 +102,6 @@ export default function RegisterScreen({ navigation }) {
           onChangeText={setConfirmarPass}
           secureTextEntry={true}
         />
-
-        {/* Picker es el componente de selección desplegable */}
-        <Text style={styles.etiqueta}>Rol en la empresa</Text>
-        <View style={styles.pickerContenedor}>
-          <Picker
-            selectedValue={rol}              // El valor actualmente seleccionado
-            onValueChange={(valor) => setRol(valor)} // Se actualiza al cambiar selección
-          >
-            <Picker.Item label="Técnico"     value="tecnico" />
-            <Picker.Item label="Supervisor"  value="supervisor" />
-          </Picker>
-        </View>
 
         <TouchableOpacity
           style={[styles.boton, cargando && styles.botonDesactivado]}
@@ -187,13 +162,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-  },
-  pickerContenedor: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#D5D8DC',
-    borderRadius: 8,
-    overflow: 'hidden',
   },
   boton: {
     backgroundColor: '#1B4F72',

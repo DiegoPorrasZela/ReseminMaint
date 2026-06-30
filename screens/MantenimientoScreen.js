@@ -1,83 +1,102 @@
-// MantenimientoScreen.js — Formulario para registrar un nuevo mantenimiento
-
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, Alert, ScrollView, ActivityIndicator,
+  StyleSheet, Alert, ScrollView, ActivityIndicator, Platform,
 } from 'react-native';
 
 import { Picker } from '@react-native-picker/picker';
-import { API_URL } from '../utils/api';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { Ionicons } from '@expo/vector-icons';
+import { API_URL, authFetch } from '../utils/api';
 
-// El componente recibe "usuario" con los datos del técnico logueado
+const formatearFecha = (date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
 export default function MantenimientoScreen({ usuario }) {
 
-  const [equipos,          setEquipos]          = useState([]); // Lista de equipos para el picker
-  const [equipoId,         setEquipoId]         = useState(''); // Equipo seleccionado
-  const [tipo,             setTipo]             = useState('preventivo');
-  const [descripcion,      setDescripcion]      = useState('');
-  const [fechaProgramada,  setFechaProgramada]  = useState('');
-  const [cargando,         setCargando]         = useState(false);
-  const [cargandoEquipos,  setCargandoEquipos]  = useState(true);
+  const esSupervisor = usuario?.rol === 'supervisor';
 
-  // Cargamos la lista de equipos al montar el componente
+  const [equipos,           setEquipos]           = useState([]);
+  const [tecnicos,          setTecnicos]          = useState([]);
+  const [equipoId,          setEquipoId]          = useState('');
+  const [tecnicoId,         setTecnicoId]         = useState('');
+  const [tipo,              setTipo]              = useState('preventivo');
+  const [descripcion,       setDescripcion]       = useState('');
+  const [fechaObj,          setFechaObj]          = useState(new Date());
+  const [mostrarPicker,     setMostrarPicker]     = useState(false);
+  const [cargando,          setCargando]          = useState(false);
+  const [cargandoDatos,     setCargandoDatos]     = useState(true);
+
   useEffect(() => {
-    cargarEquipos();
+    cargarDatos();
   }, []);
 
-  const cargarEquipos = async () => {
+  const cargarDatos = async () => {
     try {
-      const respuesta = await fetch(`${API_URL}/equipos`);
-      const datos     = await respuesta.json();
-      setEquipos(datos);
-      // Seleccionamos el primer equipo por defecto
-      if (datos.length > 0) setEquipoId(datos[0].id.toString());
+      const respEquipos  = await authFetch(`${API_URL}/equipos`);
+      const datosEquipos = await respEquipos.json();
+      setEquipos(datosEquipos);
+      if (datosEquipos.length > 0) setEquipoId(datosEquipos[0].id.toString());
+
+      if (esSupervisor) {
+        const respTecnicos  = await authFetch(`${API_URL}/usuarios`);
+        const datosTecnicos = await respTecnicos.json();
+
+        if (!respTecnicos.ok) {
+          Alert.alert('Error', datosTecnicos.error || 'No se pudieron cargar los técnicos');
+        } else {
+          const lista = Array.isArray(datosTecnicos) ? datosTecnicos : [];
+          setTecnicos(lista);
+          if (lista.length > 0) setTecnicoId(lista[0].id.toString());
+        }
+      }
     } catch (error) {
-      Alert.alert('Error', 'No se pudieron cargar los equipos');
+      Alert.alert('Error', 'No se pudieron cargar los datos');
     } finally {
-      setCargandoEquipos(false);
+      setCargandoDatos(false);
     }
   };
 
-  // Limpia el formulario después de registrar con éxito
   const limpiarFormulario = () => {
     setDescripcion('');
-    setFechaProgramada('');
+    setFechaObj(new Date());
     setTipo('preventivo');
     if (equipos.length > 0) setEquipoId(equipos[0].id.toString());
+    if (esSupervisor && tecnicos.length > 0) setTecnicoId(tecnicos[0].id.toString());
+  };
+
+  const onCambioFecha = (event, fechaSeleccionada) => {
+    setMostrarPicker(Platform.OS === 'ios');
+    if (event.type === 'set' && fechaSeleccionada) {
+      setFechaObj(fechaSeleccionada);
+    }
   };
 
   const handleEnviar = async () => {
 
-    // Validaciones
     if (!equipoId) {
       Alert.alert('Error', 'Selecciona un equipo');
       return;
     }
-    if (!fechaProgramada) {
-      Alert.alert('Error', 'Ingresa la fecha programada');
-      return;
-    }
 
-    // Validamos que la fecha tenga el formato correcto YYYY-MM-DD
-    const regexFecha = /^\d{4}-\d{2}-\d{2}$/;
-    if (!regexFecha.test(fechaProgramada)) {
-      Alert.alert('Formato incorrecto', 'La fecha debe ser YYYY-MM-DD\nEjemplo: 2025-06-15');
-      return;
-    }
+    const idTecnico = esSupervisor ? parseInt(tecnicoId) : usuario.id;
 
     setCargando(true);
 
     try {
-      const respuesta = await fetch(`${API_URL}/mantenimientos`, {
+      const respuesta = await authFetch(`${API_URL}/mantenimientos`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          equipo_id:        parseInt(equipoId), // parseInt convierte texto a número
-          tecnico_id:       usuario.id,
+          equipo_id:        parseInt(equipoId),
+          tecnico_id:       idTecnico,
           tipo,
           descripcion,
-          fecha_programada: fechaProgramada,
+          fecha_programada: formatearFecha(fechaObj),
         }),
       });
 
@@ -101,7 +120,7 @@ export default function MantenimientoScreen({ usuario }) {
     }
   };
 
-  if (cargandoEquipos) {
+  if (cargandoDatos) {
     return (
       <View style={styles.centrado}>
         <ActivityIndicator size="large" color="#1B4F72" />
@@ -114,16 +133,16 @@ export default function MantenimientoScreen({ usuario }) {
       <View style={styles.formulario}>
 
         <Text style={styles.tituloSeccion}>Nuevo Mantenimiento</Text>
-        <Text style={styles.subTitulo}>Técnico: {usuario?.nombre}</Text>
+        <Text style={styles.subTitulo}>
+          {esSupervisor ? 'Modo Supervisor' : `Técnico: ${usuario?.nombre}`}
+        </Text>
 
-        {/* Selector de equipo */}
         <Text style={styles.etiqueta}>Equipo *</Text>
         <View style={styles.pickerContenedor}>
           <Picker
             selectedValue={equipoId}
             onValueChange={(valor) => setEquipoId(valor)}
           >
-            {/* Mapeamos el arreglo de equipos para crear cada opción */}
             {equipos.map((eq) => (
               <Picker.Item
                 key={eq.id.toString()}
@@ -134,7 +153,26 @@ export default function MantenimientoScreen({ usuario }) {
           </Picker>
         </View>
 
-        {/* Selector de tipo de mantenimiento */}
+        {esSupervisor && (
+          <>
+            <Text style={styles.etiqueta}>Asignar Técnico *</Text>
+            <View style={styles.pickerContenedor}>
+              <Picker
+                selectedValue={tecnicoId}
+                onValueChange={(valor) => setTecnicoId(valor)}
+              >
+                {tecnicos.map((t) => (
+                  <Picker.Item
+                    key={t.id.toString()}
+                    label={`${t.nombre} (${t.rol})`}
+                    value={t.id.toString()}
+                  />
+                ))}
+              </Picker>
+            </View>
+          </>
+        )}
+
         <Text style={styles.etiqueta}>Tipo *</Text>
         <View style={styles.pickerContenedor}>
           <Picker selectedValue={tipo} onValueChange={(valor) => setTipo(valor)}>
@@ -143,25 +181,34 @@ export default function MantenimientoScreen({ usuario }) {
           </Picker>
         </View>
 
-        {/* Campo de descripción con múltiples líneas */}
         <Text style={styles.etiqueta}>Descripción del trabajo</Text>
         <TextInput
           style={[styles.input, styles.inputMultilinea]}
           placeholder="Describe el trabajo a realizar..."
           value={descripcion}
           onChangeText={setDescripcion}
-          multiline={true}          // Permite múltiples líneas
+          multiline={true}
           numberOfLines={4}
-          textAlignVertical="top"   // El cursor empieza arriba
+          textAlignVertical="top"
         />
 
-        <Text style={styles.etiqueta}>Fecha programada * (YYYY-MM-DD)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Ej: 2025-06-15"
-          value={fechaProgramada}
-          onChangeText={setFechaProgramada}
-        />
+        <Text style={styles.etiqueta}>Fecha programada *</Text>
+        <TouchableOpacity
+          style={styles.inputFecha}
+          onPress={() => setMostrarPicker(true)}
+        >
+          <Text style={styles.textoFecha}>{formatearFecha(fechaObj)}</Text>
+          <Ionicons name="calendar-outline" size={20} color="#7F8C8D" />
+        </TouchableOpacity>
+
+        {mostrarPicker && (
+          <DateTimePicker
+            value={fechaObj}
+            mode="date"
+            display="default"
+            onChange={onCambioFecha}
+          />
+        )}
 
         <TouchableOpacity
           style={[styles.boton, cargando && styles.botonDesactivado]}
@@ -221,6 +268,20 @@ const styles = StyleSheet.create({
   },
   inputMultilinea: {
     height: 100,
+  },
+  inputFecha: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#D5D8DC',
+    borderRadius: 8,
+    padding: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  textoFecha: {
+    fontSize: 16,
+    color: '#2C3E50',
   },
   pickerContenedor: {
     backgroundColor: '#fff',

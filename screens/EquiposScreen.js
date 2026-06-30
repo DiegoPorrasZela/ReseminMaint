@@ -1,48 +1,38 @@
-// EquiposScreen.js — Catálogo de equipos mineros
-
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, FlatList, StyleSheet,
+  View, Text, FlatList, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert, RefreshControl,
 } from 'react-native';
 
-import { API_URL } from '../utils/api';
+import { API_URL, authFetch } from '../utils/api';
 
-// Colores para cada estado del equipo
 const COLORES_ESTADO = {
-  operativo:          '#27AE60', // Verde
-  en_mantenimiento:   '#F39C12', // Naranja
-  fuera_de_servicio:  '#E74C3C', // Rojo
+  operativo:         '#27AE60',
+  en_mantenimiento:  '#F39C12',
+  fuera_de_servicio: '#E74C3C',
 };
 
-// Textos en español para mostrar al usuario
 const TEXTO_ESTADO = {
-  operativo:          'Operativo',
-  en_mantenimiento:   'En Mantenimiento',
-  fuera_de_servicio:  'Fuera de Servicio',
+  operativo:         'Operativo',
+  en_mantenimiento:  'En Mantenimiento',
+  fuera_de_servicio: 'Fuera de Servicio',
 };
 
-export default function EquiposScreen() {
+export default function EquiposScreen({ usuario }) {
 
-  // Estado que guardará la lista de equipos recibida del servidor
   const [equipos,     setEquipos]     = useState([]);
-  // true mientras la primera carga está en proceso
   const [cargando,    setCargando]    = useState(true);
-  // true mientras se está refrescando (al deslizar hacia abajo)
   const [refrescando, setRefrescando] = useState(false);
 
-  // useEffect con [] se ejecuta UNA SOLA VEZ cuando el componente se monta
   useEffect(() => {
     cargarEquipos();
-  }, []); // El [] vacío significa "solo al montar"
+  }, []);
 
-  // Función asíncrona que hace fetch al backend
   const cargarEquipos = async () => {
     try {
-      // GET al endpoint /api/equipos — no necesita body ni headers especiales
-      const respuesta = await fetch(`${API_URL}/equipos`);
+      const respuesta = await authFetch(`${API_URL}/equipos`);
       const datos     = await respuesta.json();
-      setEquipos(datos); // Guardamos la lista en el estado
+      setEquipos(datos);
     } catch (error) {
       Alert.alert('Error', 'No se pudieron cargar los equipos.\nVerifica la conexión al servidor.');
     } finally {
@@ -51,24 +41,60 @@ export default function EquiposScreen() {
     }
   };
 
-  // Se llama cuando el usuario desliza hacia abajo para refrescar
   const onRefresh = () => {
     setRefrescando(true);
     cargarEquipos();
   };
 
-  // renderEquipo define cómo se ve CADA elemento de la lista
-  // FlatList llama a esta función por cada equipo en el arreglo
+  const cambiarEstadoEquipo = async (id, nuevoEstado) => {
+    try {
+      const respuesta = await authFetch(`${API_URL}/equipos/${id}/estado`, {
+        method:  'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ estado: nuevoEstado }),
+      });
+
+      if (respuesta.ok) {
+        setEquipos((prev) =>
+          prev.map((eq) => eq.id === id ? { ...eq, estado: nuevoEstado } : eq)
+        );
+      }
+    } catch (error) {
+      Alert.alert('Error', 'No se pudo actualizar el estado del equipo');
+    }
+  };
+
+  const mostrarOpcionesEstado = (item) => {
+    Alert.alert(
+      'Cambiar Estado',
+      item.nombre,
+      [
+        { text: 'Operativo',         onPress: () => cambiarEstadoEquipo(item.id, 'operativo')         },
+        { text: 'En Mantenimiento',  onPress: () => cambiarEstadoEquipo(item.id, 'en_mantenimiento')  },
+        { text: 'Fuera de Servicio', onPress: () => cambiarEstadoEquipo(item.id, 'fuera_de_servicio') },
+        { text: 'Cancelar', style: 'cancel' },
+      ]
+    );
+  };
+
   const renderEquipo = ({ item }) => (
     <View style={styles.tarjeta}>
 
-      {/* Fila superior: código y badge de estado */}
       <View style={styles.filaSuperior}>
         <Text style={styles.codigoEquipo}>{item.codigo}</Text>
-        {/* El color del badge cambia según el estado */}
-        <View style={[styles.badge, { backgroundColor: COLORES_ESTADO[item.estado] }]}>
-          <Text style={styles.textoBadge}>{TEXTO_ESTADO[item.estado]}</Text>
-        </View>
+
+        {usuario?.rol === 'supervisor' ? (
+          <TouchableOpacity
+            style={[styles.badge, { backgroundColor: COLORES_ESTADO[item.estado] }]}
+            onPress={() => mostrarOpcionesEstado(item)}
+          >
+            <Text style={styles.textoBadge}>{TEXTO_ESTADO[item.estado]}</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={[styles.badge, { backgroundColor: COLORES_ESTADO[item.estado] }]}>
+            <Text style={styles.textoBadge}>{TEXTO_ESTADO[item.estado]}</Text>
+          </View>
+        )}
       </View>
 
       <Text style={styles.nombreEquipo}>{item.nombre}</Text>
@@ -78,7 +104,6 @@ export default function EquiposScreen() {
     </View>
   );
 
-  // Mientras carga la primera vez, mostramos un spinner centrado
   if (cargando) {
     return (
       <View style={styles.centrado}>
@@ -92,14 +117,12 @@ export default function EquiposScreen() {
     <View style={styles.contenedor}>
       <Text style={styles.conteo}>{equipos.length} equipos registrados</Text>
 
-      {/* FlatList renderiza listas largas de forma eficiente */}
       <FlatList
-        data={equipos}                                          // El arreglo de datos
-        renderItem={renderEquipo}                               // Cómo dibujar cada item
-        keyExtractor={(item) => item.id.toString()}             // ID único por item
+        data={equipos}
+        renderItem={renderEquipo}
+        keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={styles.lista}
         refreshControl={
-          // RefreshControl agrega el gesto de "tirar para refrescar"
           <RefreshControl refreshing={refrescando} onRefresh={onRefresh} />
         }
       />
@@ -136,17 +159,15 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 16,
     marginBottom: 12,
-    // Sombra en Android
     elevation: 3,
-    // Sombra en iOS
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
   },
   filaSuperior: {
-    flexDirection: 'row',          // Elementos en fila horizontal
-    justifyContent: 'space-between', // Uno a cada lado
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
   },

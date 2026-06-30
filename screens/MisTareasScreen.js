@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
   StyleSheet, ActivityIndicator, Alert, RefreshControl,
 } from 'react-native';
 
 import { API_URL, authFetch } from '../utils/api';
+
+const ORDEN_ESTADO = { pendiente: 0, en_proceso: 1, completado: 2 };
 
 const COLORES_ESTADO = {
   pendiente:  '#E67E22',
@@ -18,32 +20,41 @@ const TEXTO_ESTADO = {
   completado: 'Completado',
 };
 
-export default function HistorialScreen({ usuario }) {
+export default function MisTareasScreen({ usuario }) {
 
-  const [mantenimientos, setMantenimientos] = useState([]);
-  const [cargando,       setCargando]       = useState(true);
-  const [refrescando,    setRefrescando]    = useState(false);
+  const [tareas,      setTareas]      = useState([]);
+  const [cargando,    setCargando]    = useState(true);
+  const [refrescando, setRefrescando] = useState(false);
 
-  useEffect(() => {
-    cargarHistorial();
-  }, []);
-
-  const cargarHistorial = async () => {
+  const cargarTareas = useCallback(async () => {
     try {
-      const respuesta = await authFetch(`${API_URL}/mantenimientos`);
+      const respuesta = await authFetch(`${API_URL}/mantenimientos/mis-tareas`);
       const datos     = await respuesta.json();
-      setMantenimientos(datos);
-    } catch (error) {
-      Alert.alert('Error', 'No se pudo cargar el historial');
+
+      if (!respuesta.ok) {
+        Alert.alert('Error', datos.error || 'No se pudieron cargar las tareas');
+        return;
+      }
+
+      const ordenadas = [...datos].sort(
+        (a, b) => ORDEN_ESTADO[a.estado] - ORDEN_ESTADO[b.estado]
+      );
+      setTareas(ordenadas);
+    } catch {
+      Alert.alert('Error', 'No se pudo conectar al servidor');
     } finally {
       setCargando(false);
       setRefrescando(false);
     }
-  };
+  }, [usuario.id]);
+
+  useEffect(() => {
+    cargarTareas();
+  }, [cargarTareas]);
 
   const onRefresh = () => {
     setRefrescando(true);
-    cargarHistorial();
+    cargarTareas();
   };
 
   const cambiarEstado = async (id, nuevoEstado) => {
@@ -55,15 +66,20 @@ export default function HistorialScreen({ usuario }) {
       });
 
       if (respuesta.ok) {
-        setMantenimientos((prev) =>
-          prev.map((m) => m.id === id ? { ...m, estado: nuevoEstado } : m)
-        );
+        setTareas((prev) => {
+          const actualizadas = prev.map((t) =>
+            t.id === id ? { ...t, estado: nuevoEstado } : t
+          );
+          return [...actualizadas].sort(
+            (a, b) => ORDEN_ESTADO[a.estado] - ORDEN_ESTADO[b.estado]
+          );
+        });
       } else {
         const datos = await respuesta.json();
         Alert.alert('Error', datos.error || 'No se pudo actualizar el estado');
       }
-    } catch (error) {
-      Alert.alert('Error', 'No se pudo actualizar el estado');
+    } catch {
+      Alert.alert('Error', 'No se pudo conectar al servidor');
     }
   };
 
@@ -80,27 +96,21 @@ export default function HistorialScreen({ usuario }) {
     );
   };
 
-  const puedeEditar = (item) =>
-    usuario?.rol === 'supervisor' || item.tecnico_id === usuario?.id;
+  const pendientes  = tareas.filter((t) => t.estado === 'pendiente').length;
+  const enProceso   = tareas.filter((t) => t.estado === 'en_proceso').length;
+  const completadas = tareas.filter((t) => t.estado === 'completado').length;
 
-  const renderMantenimiento = ({ item }) => (
-    <View style={styles.tarjeta}>
+  const renderTarea = ({ item }) => (
+    <View style={[styles.tarjeta, item.estado === 'completado' && styles.tarjetaCompletada]}>
 
       <View style={styles.filaSuperior}>
         <Text style={styles.equipoNombre} numberOfLines={1}>{item.equipo_nombre}</Text>
-
-        {puedeEditar(item) ? (
-          <TouchableOpacity
-            style={[styles.badge, { backgroundColor: COLORES_ESTADO[item.estado] }]}
-            onPress={() => mostrarOpciones(item)}
-          >
-            <Text style={styles.textoBadge}>{TEXTO_ESTADO[item.estado]}</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={[styles.badge, { backgroundColor: COLORES_ESTADO[item.estado] }]}>
-            <Text style={styles.textoBadge}>{TEXTO_ESTADO[item.estado]}</Text>
-          </View>
-        )}
+        <TouchableOpacity
+          style={[styles.badge, { backgroundColor: COLORES_ESTADO[item.estado] }]}
+          onPress={() => mostrarOpciones(item)}
+        >
+          <Text style={styles.textoBadge}>{TEXTO_ESTADO[item.estado]}</Text>
+        </TouchableOpacity>
       </View>
 
       <Text style={styles.equipoCodigo}>{item.equipo_codigo}</Text>
@@ -110,11 +120,6 @@ export default function HistorialScreen({ usuario }) {
         <Text style={styles.valor}>
           {item.tipo === 'preventivo' ? 'Preventivo' : 'Correctivo'}
         </Text>
-      </View>
-
-      <View style={styles.filaInfo}>
-        <Text style={styles.etiqueta}>Técnico:</Text>
-        <Text style={styles.valor}>{item.tecnico_nombre}</Text>
       </View>
 
       <View style={styles.filaInfo}>
@@ -135,24 +140,40 @@ export default function HistorialScreen({ usuario }) {
     return (
       <View style={styles.centrado}>
         <ActivityIndicator size="large" color="#1B4F72" />
-        <Text style={styles.textoCargando}>Cargando historial...</Text>
+        <Text style={styles.textoCargando}>Cargando tareas...</Text>
       </View>
     );
   }
 
   return (
     <View style={styles.contenedor}>
-      <Text style={styles.conteo}>{mantenimientos.length} registros</Text>
 
-      {mantenimientos.length === 0 ? (
+      <View style={styles.resumen}>
+        <View style={styles.resumenItem}>
+          <Text style={[styles.resumenNumero, { color: '#E67E22' }]}>{pendientes}</Text>
+          <Text style={styles.resumenLabel}>Pendientes</Text>
+        </View>
+        <View style={styles.separadorResumen} />
+        <View style={styles.resumenItem}>
+          <Text style={[styles.resumenNumero, { color: '#2980B9' }]}>{enProceso}</Text>
+          <Text style={styles.resumenLabel}>En Proceso</Text>
+        </View>
+        <View style={styles.separadorResumen} />
+        <View style={styles.resumenItem}>
+          <Text style={[styles.resumenNumero, { color: '#27AE60' }]}>{completadas}</Text>
+          <Text style={styles.resumenLabel}>Completadas</Text>
+        </View>
+      </View>
+
+      {tareas.length === 0 ? (
         <View style={styles.centrado}>
-          <Text style={styles.textoVacio}>No hay mantenimientos registrados</Text>
-          <Text style={styles.textoVacioSub}>Ve a la pestaña "Nuevo" para crear uno</Text>
+          <Text style={styles.textoVacio}>No tienes tareas asignadas</Text>
+          <Text style={styles.textoVacioSub}>Un supervisor te asignará mantenimientos</Text>
         </View>
       ) : (
         <FlatList
-          data={mantenimientos}
-          renderItem={renderMantenimiento}
+          data={tareas}
+          renderItem={renderTarea}
           keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={styles.lista}
           refreshControl={
@@ -187,12 +208,39 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#BDC3C7',
     marginTop: 6,
+    textAlign: 'center',
+    paddingHorizontal: 30,
   },
-  conteo: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+  resumen: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginTop: 14,
+    marginBottom: 8,
+    borderRadius: 10,
+    paddingVertical: 14,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+  },
+  resumenItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  resumenNumero: {
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  resumenLabel: {
+    fontSize: 11,
     color: '#7F8C8D',
-    fontSize: 13,
+    marginTop: 2,
+  },
+  separadorResumen: {
+    width: 1,
+    backgroundColor: '#ECF0F1',
   },
   lista: {
     paddingHorizontal: 16,
@@ -208,6 +256,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
+  },
+  tarjetaCompletada: {
+    opacity: 0.65,
   },
   filaSuperior: {
     flexDirection: 'row',
@@ -249,7 +300,7 @@ const styles = StyleSheet.create({
   etiqueta: {
     fontSize: 13,
     color: '#7F8C8D',
-    width: 68,
+    width: 52,
   },
   valor: {
     fontSize: 13,

@@ -6,9 +6,20 @@ const auth    = require('../middleware/authMiddleware');
 const { requireSupervisor } = require('../middleware/authMiddleware');
 
 router.get('/', auth, requireSupervisor, (req, res) => {
-  const consulta = 'SELECT id, nombre, email, rol, created_at FROM usuarios ORDER BY nombre ASC';
+  const { rol } = req.query;
 
-  db.query(consulta, (error, resultados) => {
+  let consulta = 'SELECT id, nombre, email, rol, created_at FROM usuarios';
+  const params = [];
+
+  // Permite filtrar por rol, ej: /api/usuarios?rol=tecnico
+  if (rol) {
+    consulta += ' WHERE rol = ?';
+    params.push(rol);
+  }
+
+  consulta += ' ORDER BY nombre ASC';
+
+  db.query(consulta, params, (error, resultados) => {
     if (error) return res.status(500).json({ error: 'Error al obtener usuarios' });
     res.json(resultados);
   });

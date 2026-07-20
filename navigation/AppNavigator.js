@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 
 import LoginScreen         from '../screens/LoginScreen';
+import DashboardScreen     from '../screens/DashboardScreen';
 import RegisterScreen      from '../screens/RegisterScreen';
 import EquiposScreen       from '../screens/EquiposScreen';
 import MantenimientoScreen from '../screens/MantenimientoScreen';
@@ -21,7 +22,8 @@ function TabsSupervisor({ usuario, setUsuario }) {
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;
-          if      (route.name === 'Equipos')   iconName = focused ? 'construct'  : 'construct-outline';
+          if      (route.name === 'Inicio')     iconName = focused ? 'speedometer' : 'speedometer-outline';
+          else if (route.name === 'Equipos')    iconName = focused ? 'construct'  : 'construct-outline';
           else if (route.name === 'Nuevo')      iconName = focused ? 'add-circle' : 'add-circle-outline';
           else if (route.name === 'Historial')  iconName = focused ? 'list'       : 'list-outline';
           else if (route.name === 'Usuarios')   iconName = focused ? 'people'     : 'people-outline';
@@ -35,6 +37,10 @@ function TabsSupervisor({ usuario, setUsuario }) {
         headerTitleStyle: { fontWeight: 'bold' },
       })}
     >
+      <Tab.Screen name="Inicio" options={{ title: 'Inicio' }}>
+        {(props) => <DashboardScreen {...props} usuario={usuario} />}
+      </Tab.Screen>
+
       <Tab.Screen name="Equipos" options={{ title: 'Equipos' }}>
         {(props) => <EquiposScreen {...props} usuario={usuario} />}
       </Tab.Screen>

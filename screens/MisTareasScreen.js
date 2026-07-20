@@ -5,6 +5,8 @@ import {
 } from 'react-native';
 
 import { API_URL, authFetch } from '../utils/api';
+import { esVencido, formatearFecha } from '../utils/fechas';
+import ModalCompletar from '../components/ModalCompletar';
 
 const ORDEN_ESTADO = { pendiente: 0, en_proceso: 1, completado: 2 };
 
@@ -22,9 +24,10 @@ const TEXTO_ESTADO = {
 
 export default function MisTareasScreen({ usuario }) {
 
-  const [tareas,      setTareas]      = useState([]);
-  const [cargando,    setCargando]    = useState(true);
-  const [refrescando, setRefrescando] = useState(false);
+  const [tareas,        setTareas]        = useState([]);
+  const [cargando,      setCargando]      = useState(true);
+  const [refrescando,   setRefrescando]   = useState(false);
+  const [tareaACerrar,  setTareaACerrar]  = useState(null);
 
   const cargarTareas = useCallback(async () => {
     try {
@@ -57,23 +60,18 @@ export default function MisTareasScreen({ usuario }) {
     cargarTareas();
   };
 
-  const cambiarEstado = async (id, nuevoEstado) => {
+  const cambiarEstado = async (id, nuevoEstado, observaciones = null) => {
     try {
       const respuesta = await authFetch(`${API_URL}/mantenimientos/${id}/estado`, {
         method:  'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ estado: nuevoEstado }),
+        body:    JSON.stringify({ estado: nuevoEstado, observaciones }),
       });
 
       if (respuesta.ok) {
-        setTareas((prev) => {
-          const actualizadas = prev.map((t) =>
-            t.id === id ? { ...t, estado: nuevoEstado } : t
-          );
-          return [...actualizadas].sort(
-            (a, b) => ORDEN_ESTADO[a.estado] - ORDEN_ESTADO[b.estado]
-          );
-        });
+        // Se recarga desde el servidor para reflejar también
+        // la fecha de cierre y el estado sincronizado del equipo
+        cargarTareas();
       } else {
         const datos = await respuesta.json();
         Alert.alert('Error', datos.error || 'No se pudo actualizar el estado');
@@ -90,7 +88,7 @@ export default function MisTareasScreen({ usuario }) {
       [
         { text: 'Pendiente',  onPress: () => cambiarEstado(item.id, 'pendiente')  },
         { text: 'En Proceso', onPress: () => cambiarEstado(item.id, 'en_proceso') },
-        { text: 'Completado', onPress: () => cambiarEstado(item.id, 'completado') },
+        { text: 'Completado', onPress: () => setTareaACerrar(item) },
         { text: 'Cancelar', style: 'cancel' },
       ]
     );
@@ -113,7 +111,12 @@ export default function MisTareasScreen({ usuario }) {
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.equipoCodigo}>{item.equipo_codigo}</Text>
+      <View style={styles.filaCodigos}>
+        <Text style={styles.equipoCodigo}>{item.equipo_codigo}</Text>
+        {esVencido(item) && (
+          <Text style={styles.badgeVencido}>VENCIDO</Text>
+        )}
+      </View>
 
       <View style={styles.filaInfo}>
         <Text style={styles.etiqueta}>Tipo:</Text>
@@ -124,13 +127,22 @@ export default function MisTareasScreen({ usuario }) {
 
       <View style={styles.filaInfo}>
         <Text style={styles.etiqueta}>Fecha:</Text>
-        <Text style={styles.valor}>
-          {new Date(item.fecha_programada).toLocaleDateString('es-PE')}
-        </Text>
+        <Text style={styles.valor}>{formatearFecha(item.fecha_programada)}</Text>
       </View>
+
+      {item.estado === 'completado' && item.fecha_completado ? (
+        <View style={styles.filaInfo}>
+          <Text style={styles.etiqueta}>Cerrado:</Text>
+          <Text style={styles.valor}>{formatearFecha(item.fecha_completado)}</Text>
+        </View>
+      ) : null}
 
       {item.descripcion ? (
         <Text style={styles.descripcion}>{item.descripcion}</Text>
+      ) : null}
+
+      {item.estado === 'completado' && item.observaciones ? (
+        <Text style={styles.observaciones}>Obs: {item.observaciones}</Text>
       ) : null}
 
     </View>
@@ -181,6 +193,16 @@ export default function MisTareasScreen({ usuario }) {
           }
         />
       )}
+
+      <ModalCompletar
+        visible={tareaACerrar !== null}
+        equipoNombre={tareaACerrar?.equipo_nombre || ''}
+        onCancelar={() => setTareaACerrar(null)}
+        onConfirmar={(observaciones) => {
+          cambiarEstado(tareaACerrar.id, 'completado', observaciones || null);
+          setTareaACerrar(null);
+        }}
+      />
     </View>
   );
 }
@@ -273,15 +295,29 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 8,
   },
+  filaCodigos: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
   equipoCodigo: {
     fontSize: 12,
     color: '#1B4F72',
     backgroundColor: '#EBF5FB',
-    alignSelf: 'flex-start',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 4,
-    marginBottom: 10,
+  },
+  badgeVencido: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#fff',
+    backgroundColor: '#C0392B',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    marginLeft: 8,
+    overflow: 'hidden',
   },
   badge: {
     paddingHorizontal: 10,
@@ -315,5 +351,11 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#ECF0F1',
     paddingTop: 8,
+  },
+  observaciones: {
+    marginTop: 8,
+    fontSize: 13,
+    color: '#27AE60',
+    fontStyle: 'italic',
   },
 });

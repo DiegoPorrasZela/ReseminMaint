@@ -43,7 +43,8 @@ export default function MantenimientoScreen({ usuario }) {
       if (datosEquipos.length > 0) setEquipoId(datosEquipos[0].id.toString());
 
       if (esSupervisor) {
-        const respTecnicos  = await authFetch(`${API_URL}/usuarios`);
+        // Solo se listan usuarios con rol técnico para asignarles trabajos
+        const respTecnicos  = await authFetch(`${API_URL}/usuarios?rol=tecnico`);
         const datosTecnicos = await respTecnicos.json();
 
         if (!respTecnicos.ok) {
@@ -164,7 +165,7 @@ export default function MantenimientoScreen({ usuario }) {
                 {tecnicos.map((t) => (
                   <Picker.Item
                     key={t.id.toString()}
-                    label={`${t.nombre} (${t.rol})`}
+                    label={t.nombre}
                     value={t.id.toString()}
                   />
                 ))}

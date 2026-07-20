@@ -5,6 +5,7 @@ const rutasAuth           = require('./routes/auth');
 const rutasEquipos        = require('./routes/equipos');
 const rutasMantenimientos = require('./routes/mantenimientos');
 const rutasUsuarios       = require('./routes/usuarios');
+const rutasReportes       = require('./routes/reportes');
 
 const app    = express();
 const PUERTO = 3000;
@@ -16,6 +17,7 @@ app.use('/api/auth',           rutasAuth);
 app.use('/api/equipos',        rutasEquipos);
 app.use('/api/mantenimientos', rutasMantenimientos);
 app.use('/api/usuarios',       rutasUsuarios);
+app.use('/api/reportes',       rutasReportes);
 
 app.get('/', (req, res) => {
   res.json({ mensaje: 'Servidor ReseminMaint funcionando correctamente' });

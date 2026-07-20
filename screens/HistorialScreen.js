@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity,
+  View, Text, FlatList, TouchableOpacity, ScrollView,
   StyleSheet, ActivityIndicator, Alert, RefreshControl,
 } from 'react-native';
 
+import { Ionicons } from '@expo/vector-icons';
 import { API_URL, authFetch } from '../utils/api';
+import { esVencido, formatearFecha } from '../utils/fechas';
+import { exportarPDF, exportarExcel } from '../utils/reportes';
+import ModalCompletar from '../components/ModalCompletar';
 
 const COLORES_ESTADO = {
   pendiente:  '#E67E22',
@@ -18,11 +22,29 @@ const TEXTO_ESTADO = {
   completado: 'Completado',
 };
 
+const FILTROS_ESTADO = [
+  { clave: 'todos',      texto: 'Todos'      },
+  { clave: 'pendiente',  texto: 'Pendientes' },
+  { clave: 'en_proceso', texto: 'En Proceso' },
+  { clave: 'completado', texto: 'Completados'},
+  { clave: 'vencidos',   texto: 'Vencidos'   },
+];
+
+const FILTROS_TIPO = [
+  { clave: 'todos',      texto: 'Todos'       },
+  { clave: 'preventivo', texto: 'Preventivos' },
+  { clave: 'correctivo', texto: 'Correctivos' },
+];
+
 export default function HistorialScreen({ usuario }) {
 
   const [mantenimientos, setMantenimientos] = useState([]);
   const [cargando,       setCargando]       = useState(true);
   const [refrescando,    setRefrescando]    = useState(false);
+  const [filtroEstado,   setFiltroEstado]   = useState('todos');
+  const [filtroTipo,     setFiltroTipo]     = useState('todos');
+  const [tareaACerrar,   setTareaACerrar]   = useState(null);
+  const [exportando,     setExportando]     = useState(false);
 
   useEffect(() => {
     cargarHistorial();
@@ -46,18 +68,17 @@ export default function HistorialScreen({ usuario }) {
     cargarHistorial();
   };
 
-  const cambiarEstado = async (id, nuevoEstado) => {
+  const cambiarEstado = async (id, nuevoEstado, observaciones = null) => {
     try {
       const respuesta = await authFetch(`${API_URL}/mantenimientos/${id}/estado`, {
         method:  'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ estado: nuevoEstado }),
+        body:    JSON.stringify({ estado: nuevoEstado, observaciones }),
       });
 
       if (respuesta.ok) {
-        setMantenimientos((prev) =>
-          prev.map((m) => m.id === id ? { ...m, estado: nuevoEstado } : m)
-        );
+        // Se recarga para reflejar fecha de cierre y sincronización del equipo
+        cargarHistorial();
       } else {
         const datos = await respuesta.json();
         Alert.alert('Error', datos.error || 'No se pudo actualizar el estado');
@@ -67,21 +88,130 @@ export default function HistorialScreen({ usuario }) {
     }
   };
 
-  const mostrarOpciones = (item) => {
+  const eliminarMantenimiento = (item) => {
     Alert.alert(
-      'Cambiar Estado',
-      `Equipo: ${item.equipo_nombre}`,
+      'Eliminar Mantenimiento',
+      `¿Eliminar el registro de ${item.equipo_nombre}? Esta acción no se puede deshacer.`,
       [
-        { text: 'Pendiente',  onPress: () => cambiarEstado(item.id, 'pendiente')  },
-        { text: 'En Proceso', onPress: () => cambiarEstado(item.id, 'en_proceso') },
-        { text: 'Completado', onPress: () => cambiarEstado(item.id, 'completado') },
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const respuesta = await authFetch(`${API_URL}/mantenimientos/${item.id}`, {
+                method: 'DELETE',
+              });
+              if (respuesta.ok) {
+                cargarHistorial();
+              } else {
+                const datos = await respuesta.json();
+                Alert.alert('Error', datos.error || 'No se pudo eliminar');
+              }
+            } catch (error) {
+              Alert.alert('Error', 'No se pudo conectar al servidor');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const mostrarOpciones = (item) => {
+    const opciones = [
+      { text: 'Pendiente',  onPress: () => cambiarEstado(item.id, 'pendiente')  },
+      { text: 'En Proceso', onPress: () => cambiarEstado(item.id, 'en_proceso') },
+      { text: 'Completado', onPress: () => setTareaACerrar(item) },
+    ];
+
+    if (usuario?.rol === 'supervisor') {
+      opciones.push({
+        text: 'Eliminar registro',
+        style: 'destructive',
+        onPress: () => eliminarMantenimiento(item),
+      });
+    }
+
+    opciones.push({ text: 'Cancelar', style: 'cancel' });
+
+    Alert.alert('Cambiar Estado', `Equipo: ${item.equipo_nombre}`, opciones);
+  };
+
+  const puedeEditar = (item) =>
+    usuario?.rol === 'supervisor' || item.tecnico_id === usuario?.id;
+
+  // Aplica los filtros seleccionados sobre la lista completa
+  const filtrados = mantenimientos.filter((m) => {
+    const pasaEstado =
+      filtroEstado === 'todos'    ? true :
+      filtroEstado === 'vencidos' ? esVencido(m) :
+      m.estado === filtroEstado;
+
+    const pasaTipo = filtroTipo === 'todos' || m.tipo === filtroTipo;
+
+    return pasaEstado && pasaTipo;
+  });
+
+  const textoFiltro = () => {
+    const partes = [];
+    partes.push(FILTROS_ESTADO.find((f) => f.clave === filtroEstado)?.texto || 'Todos');
+    if (filtroTipo !== 'todos') {
+      partes.push(FILTROS_TIPO.find((f) => f.clave === filtroTipo)?.texto);
+    }
+    return partes.join(' / ');
+  };
+
+  const exportar = () => {
+    if (filtrados.length === 0) {
+      Alert.alert('Sin datos', 'No hay registros para exportar con los filtros actuales');
+      return;
+    }
+
+    Alert.alert(
+      'Exportar Reporte',
+      `Se exportarán ${filtrados.length} registros (${textoFiltro()})`,
+      [
+        { text: 'PDF',    onPress: () => generarReporte('pdf')   },
+        { text: 'Excel',  onPress: () => generarReporte('excel') },
         { text: 'Cancelar', style: 'cancel' },
       ]
     );
   };
 
-  const puedeEditar = (item) =>
-    usuario?.rol === 'supervisor' || item.tecnico_id === usuario?.id;
+  const generarReporte = async (formato) => {
+    setExportando(true);
+    try {
+      if (formato === 'pdf') {
+        await exportarPDF(filtrados, textoFiltro());
+      } else {
+        await exportarExcel(filtrados);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'No se pudo generar el reporte');
+    } finally {
+      setExportando(false);
+    }
+  };
+
+  const renderChips = (filtros, valorActual, setValor) => (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.filaChips}
+    >
+      {filtros.map((f) => (
+        <TouchableOpacity
+          key={f.clave}
+          style={[styles.chip, valorActual === f.clave && styles.chipActivo]}
+          onPress={() => setValor(f.clave)}
+        >
+          <Text style={[styles.textoChip, valorActual === f.clave && styles.textoChipActivo]}>
+            {f.texto}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </ScrollView>
+  );
 
   const renderMantenimiento = ({ item }) => (
     <View style={styles.tarjeta}>
@@ -103,7 +233,12 @@ export default function HistorialScreen({ usuario }) {
         )}
       </View>
 
-      <Text style={styles.equipoCodigo}>{item.equipo_codigo}</Text>
+      <View style={styles.filaCodigos}>
+        <Text style={styles.equipoCodigo}>{item.equipo_codigo}</Text>
+        {esVencido(item) && (
+          <Text style={styles.badgeVencido}>VENCIDO</Text>
+        )}
+      </View>
 
       <View style={styles.filaInfo}>
         <Text style={styles.etiqueta}>Tipo:</Text>
@@ -119,13 +254,22 @@ export default function HistorialScreen({ usuario }) {
 
       <View style={styles.filaInfo}>
         <Text style={styles.etiqueta}>Fecha:</Text>
-        <Text style={styles.valor}>
-          {new Date(item.fecha_programada).toLocaleDateString('es-PE')}
-        </Text>
+        <Text style={styles.valor}>{formatearFecha(item.fecha_programada)}</Text>
       </View>
+
+      {item.estado === 'completado' && item.fecha_completado ? (
+        <View style={styles.filaInfo}>
+          <Text style={styles.etiqueta}>Cerrado:</Text>
+          <Text style={styles.valor}>{formatearFecha(item.fecha_completado)}</Text>
+        </View>
+      ) : null}
 
       {item.descripcion ? (
         <Text style={styles.descripcion}>{item.descripcion}</Text>
+      ) : null}
+
+      {item.estado === 'completado' && item.observaciones ? (
+        <Text style={styles.observaciones}>Obs: {item.observaciones}</Text>
       ) : null}
 
     </View>
@@ -142,16 +286,40 @@ export default function HistorialScreen({ usuario }) {
 
   return (
     <View style={styles.contenedor}>
-      <Text style={styles.conteo}>{mantenimientos.length} registros</Text>
 
-      {mantenimientos.length === 0 ? (
+      <View style={styles.filtros}>
+        {renderChips(FILTROS_ESTADO, filtroEstado, setFiltroEstado)}
+        {renderChips(FILTROS_TIPO, filtroTipo, setFiltroTipo)}
+      </View>
+
+      <View style={styles.filaConteo}>
+        <Text style={styles.conteo}>{filtrados.length} registros</Text>
+
+        <TouchableOpacity
+          style={[styles.botonExportar, exportando && styles.botonDesactivado]}
+          onPress={exportar}
+          disabled={exportando}
+        >
+          {exportando
+            ? <ActivityIndicator size="small" color="#fff" />
+            : (
+              <>
+                <Ionicons name="download-outline" size={16} color="#fff" />
+                <Text style={styles.textoExportar}>Exportar</Text>
+              </>
+            )
+          }
+        </TouchableOpacity>
+      </View>
+
+      {filtrados.length === 0 ? (
         <View style={styles.centrado}>
-          <Text style={styles.textoVacio}>No hay mantenimientos registrados</Text>
-          <Text style={styles.textoVacioSub}>Ve a la pestaña "Nuevo" para crear uno</Text>
+          <Text style={styles.textoVacio}>No hay mantenimientos para mostrar</Text>
+          <Text style={styles.textoVacioSub}>Prueba cambiando los filtros o crea uno en "Nuevo"</Text>
         </View>
       ) : (
         <FlatList
-          data={mantenimientos}
+          data={filtrados}
           renderItem={renderMantenimiento}
           keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={styles.lista}
@@ -160,6 +328,16 @@ export default function HistorialScreen({ usuario }) {
           }
         />
       )}
+
+      <ModalCompletar
+        visible={tareaACerrar !== null}
+        equipoNombre={tareaACerrar?.equipo_nombre || ''}
+        onCancelar={() => setTareaACerrar(null)}
+        onConfirmar={(observaciones) => {
+          cambiarEstado(tareaACerrar.id, 'completado', observaciones || null);
+          setTareaACerrar(null);
+        }}
+      />
     </View>
   );
 }
@@ -187,12 +365,68 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#BDC3C7',
     marginTop: 6,
+    textAlign: 'center',
+    paddingHorizontal: 30,
+  },
+  filtros: {
+    backgroundColor: '#fff',
+    paddingTop: 10,
+    paddingBottom: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ECF0F1',
+  },
+  filaChips: {
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+  },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#F4F6F7',
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#ECF0F1',
+  },
+  chipActivo: {
+    backgroundColor: '#1B4F72',
+    borderColor: '#1B4F72',
+  },
+  textoChip: {
+    fontSize: 12,
+    color: '#7F8C8D',
+    fontWeight: '600',
+  },
+  textoChipActivo: {
+    color: '#fff',
+  },
+  filaConteo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   conteo: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
     color: '#7F8C8D',
     fontSize: 13,
+  },
+  botonExportar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F39C12',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+  },
+  botonDesactivado: {
+    opacity: 0.6,
+  },
+  textoExportar: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginLeft: 5,
   },
   lista: {
     paddingHorizontal: 16,
@@ -222,15 +456,29 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 8,
   },
+  filaCodigos: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
   equipoCodigo: {
     fontSize: 12,
     color: '#1B4F72',
     backgroundColor: '#EBF5FB',
-    alignSelf: 'flex-start',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 4,
-    marginBottom: 10,
+  },
+  badgeVencido: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#fff',
+    backgroundColor: '#C0392B',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    marginLeft: 8,
+    overflow: 'hidden',
   },
   badge: {
     paddingHorizontal: 10,
@@ -264,5 +512,11 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#ECF0F1',
     paddingTop: 8,
+  },
+  observaciones: {
+    marginTop: 8,
+    fontSize: 13,
+    color: '#27AE60',
+    fontStyle: 'italic',
   },
 });

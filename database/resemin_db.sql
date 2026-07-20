@@ -45,8 +45,10 @@ CREATE TABLE IF NOT EXISTS mantenimientos (
   equipo_id        INT NOT NULL,             -- ID del equipo (referencia a tabla equipos)
   tecnico_id       INT NOT NULL,             -- ID del técnico (referencia a tabla usuarios)
   tipo             ENUM('preventivo', 'correctivo') NOT NULL,
-  descripcion      TEXT,                     -- Descripción del trabajo realizado
+  descripcion      TEXT,                     -- Descripción del trabajo a realizar
   fecha_programada DATE NOT NULL,            -- Fecha programada del mantenimiento
+  fecha_completado DATE DEFAULT NULL,        -- Fecha real en que se completó el trabajo
+  observaciones    TEXT,                     -- Observaciones del técnico al cerrar el trabajo
   estado           ENUM('pendiente', 'en_proceso', 'completado') DEFAULT 'pendiente',
   created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (equipo_id)  REFERENCES equipos(id),   -- Relación con tabla equipos
